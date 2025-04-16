@@ -43,7 +43,7 @@ def get_rules() -> List[Dict]:
 
 def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
     """Use OpenAI to analyze the code against the rules."""
-    # openai.api_key = os.getenv('OPENAI_API_KEY')
+    
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
     annotations = []
