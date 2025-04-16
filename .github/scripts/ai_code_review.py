@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-import openai
+from openai import OpenAI
 from pathlib import Path
 from typing import List, Dict
 import requests
@@ -43,7 +43,8 @@ def get_rules() -> List[Dict]:
 
 def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
     """Use OpenAI to analyze the code against the rules."""
-    openai.api_key = os.getenv('OPENAI_API_KEY')
+    # openai.api_key = os.getenv('OPENAI_API_KEY')
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
     annotations = []
     for rule in rules:
@@ -74,7 +75,7 @@ def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
         }}
         """
         
-        response = openai.responses.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             input=[
                 {"role": "system", "content": "You are a code review assistant that helps identify code that violates specific rules."},
