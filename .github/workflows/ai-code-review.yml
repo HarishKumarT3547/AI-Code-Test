@@ -25,6 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/requirements/ai-code-review.txt
 
+      - name: Debug OpenAI API Key
+        run: |
+          echo "OpenAI API Key (first 4 chars): ${OPENAI_API_KEY:0:4}..."
+          echo "OpenAI API Key length: ${#OPENAI_API_KEY}"
+
       - name: Run AI Code Review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

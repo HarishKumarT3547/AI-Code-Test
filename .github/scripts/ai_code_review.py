@@ -14,9 +14,6 @@ GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 GITHUB_REPOSITORY = os.getenv('GITHUB_REPOSITORY')
 GITHUB_PR_NUMBER = os.getenv('GITHUB_PR_NUMBER')
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-
 def get_pr_diff() -> str:
     """Get the diff of the PR from GitHub API."""
     headers = {
@@ -46,6 +43,9 @@ def get_rules() -> List[Dict]:
 
 def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
     """Use OpenAI to analyze the code against the rules."""
+    # openai.api_key = os.getenv('OPENAI_API_KEY')
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    
     annotations = []
     for rule in rules:
         prompt = f"""
@@ -76,7 +76,7 @@ def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
         """
         
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a code review assistant that helps identify code that violates specific rules."},
                 {"role": "user", "content": prompt}
