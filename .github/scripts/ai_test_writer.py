@@ -1,6 +1,6 @@
 import os
 import json
-import openai
+from openai import OpenAI
 from pathlib import Path
 from typing import Dict, List
 import requests
@@ -32,7 +32,7 @@ def get_file_content(file_path: str) -> str:
 
 def generate_test_with_ai(file_path: str, lines: List[int], content: str) -> str:
     """Use OpenAI to generate tests for uncovered lines."""
-    openai.api_key = os.getenv('OPENAI_API_KEY')
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
     prompt = f"""
     Generate a test for the following code. The test should cover lines {lines} in the file {file_path}.
@@ -50,8 +50,8 @@ def generate_test_with_ai(file_path: str, lines: List[int], content: str) -> str
     Return only the test code, no explanations.
     """
     
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a test writing assistant that generates comprehensive test cases."},
             {"role": "user", "content": prompt}
