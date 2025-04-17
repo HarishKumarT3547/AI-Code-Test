@@ -1,21 +1,18 @@
-name: AI Code Review
+name: Code Review
 
 on:
   pull_request:
     branches: [main, master]
 
-# Add permissions block
-permissions:
-  pull-requests: write
-  contents: read
-
 jobs:
   review:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,56 +22,68 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pylint black
+          pip install pylint black bandit mypy
 
-      - name: Analyze code
+      - name: Run code analysis
+        id: analysis
         run: |
-          # Create a Python script for code analysis
-          echo 'import os' > analyze_code.py
-          echo 'import json' >> analyze_code.py
-          echo 'import subprocess' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo 'def analyze_file(file_path):' >> analyze_code.py
-          echo '    results = {' >> analyze_code.py
-          echo '        "file": file_path,' >> analyze_code.py
-          echo '        "issues": [],' >> analyze_code.py
-          echo '        "suggestions": []' >> analyze_code.py
-          echo '    }' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo '    # Check file size' >> analyze_code.py
-          echo '    if os.path.getsize(file_path) > 1000000:  # 1MB' >> analyze_code.py
-          echo '        results["issues"].append("File is too large. Consider splitting into smaller files.")' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo '    # Check for magic numbers' >> analyze_code.py
-          echo '    with open(file_path, "r") as f:' >> analyze_code.py
-          echo '        content = f.read()' >> analyze_code.py
-          echo '        if "100" in content or "1000" in content:' >> analyze_code.py
-          echo '            results["suggestions"].append("Consider using named constants instead of magic numbers.")' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo '    # Check for long functions' >> analyze_code.py
-          echo '    if len(content.split("\\n")) > 50:' >> analyze_code.py
-          echo '        results["suggestions"].append("Function might be too long. Consider breaking it into smaller functions.")' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo '    return results' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo 'def main():' >> analyze_code.py
-          echo '    all_results = []' >> analyze_code.py
-          echo '    for root, _, files in os.walk("."):' >> analyze_code.py
-          echo '        for file in files:' >> analyze_code.py
-          echo '            if file.endswith((".py", ".js", ".java", ".cpp", ".erl", ".go", ".rb", ".php")):' >> analyze_code.py
-          echo '                file_path = os.path.join(root, file)' >> analyze_code.py
-          echo '                results = analyze_file(file_path)' >> analyze_code.py
-          echo '                if results["issues"] or results["suggestions"]:' >> analyze_code.py
-          echo '                    all_results.append(results)' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo '    with open("review_results.json", "w") as f:' >> analyze_code.py
-          echo '        json.dump(all_results, f, indent=2)' >> analyze_code.py
-          echo '' >> analyze_code.py
-          echo 'if __name__ == "__main__":' >> analyze_code.py
-          echo '    main()' >> analyze_code.py
+          # Create analysis results directory
+          mkdir -p analysis_results
 
-          # Run the analysis
-          python analyze_code.py
+          # Run pylint for Python code
+          pylint src/ --output-format=json > analysis_results/pylint.json || true
+
+          # Run black for code formatting
+          black --check src/ > analysis_results/black.txt || true
+
+          # Run bandit for security issues
+          bandit -r src/ -f json -o analysis_results/bandit.json || true
+
+          # Run mypy for type checking
+          mypy src/ --json-report analysis_results/mypy || true
+
+          # Create a summary file
+          echo "# Code Analysis Summary" > analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+
+          # Add pylint results
+          echo "## Pylint Analysis" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/pylint.json ]; then
+            jq -r '.[] | "### \(.path)\n\(.message) (Line \(.line))"' analysis_results/pylint.json >> analysis_results/summary.md
+          else
+            echo "No issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add black results
+          echo "## Code Formatting" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/black.txt ]; then
+            cat analysis_results/black.txt >> analysis_results/summary.md
+          else
+            echo "No formatting issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add bandit results
+          echo "## Security Analysis" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/bandit.json ]; then
+            jq -r '.results[] | "### \(.filename)\n\(.issue_text) (Line \(.line_number))"' analysis_results/bandit.json >> analysis_results/summary.md
+          else
+            echo "No security issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add mypy results
+          echo "## Type Checking" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/mypy/index.json ]; then
+            jq -r '.files[] | "### \(.path)\n\(.messages[] | "\(.message) (Line \(.line))")"' analysis_results/mypy/index.json >> analysis_results/summary.md
+          else
+            echo "No type checking issues found" >> analysis_results/summary.md
+          fi
 
       - name: Create review comment
         uses: actions/github-script@v6
@@ -83,39 +92,29 @@ jobs:
           script: |
             const fs = require('fs');
             try {
-              const results = JSON.parse(fs.readFileSync('review_results.json', 'utf8'));
+              const summary = fs.readFileSync('analysis_results/summary.md', 'utf8');
               
-              let comment = '## AI Code Review Results\n\n';
-              
-              for (const file of results) {
-                comment += `### ${file.file}\n\n`;
-                
-                if (file.issues.length > 0) {
-                  comment += '#### Issues\n';
-                  for (const issue of file.issues) {
-                    comment += `- ⚠️ ${issue}\n`;
-                  }
-                  comment += '\n';
-                }
-                
-                if (file.suggestions.length > 0) {
-                  comment += '#### Suggestions\n';
-                  for (const suggestion of file.suggestions) {
-                    comment += `- 💡 ${suggestion}\n`;
-                  }
-                  comment += '\n';
-                }
-              }
-              
-              // Create a new comment
               await github.rest.pulls.createReview({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.issue.number,
-                body: comment,
+                body: summary,
                 event: 'COMMENT'
               });
             } catch (error) {
-              console.error('Error creating comment:', error);
-              process.exit(0);
+              console.error('Error creating review:', error);
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: 'Error processing code analysis results. Please check the workflow logs for details.',
+                event: 'COMMENT'
+              });
             }
+
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v3
+        with:
+          name: analysis-results
+          path: analysis_results/
+          retention-days: 5
