@@ -57,26 +57,96 @@ jobs:
           # Save uncovered lines to a file
           echo "$UNCOVERED_LINES" > uncovered_lines.txt
 
-          # Generate the comment body
-          echo "## Missing Test Coverage" > comment_body.md
-          echo "The following lines need test coverage:" >> comment_body.md
+          # Generate the comment body with specific test suggestions
+          echo "## Missing Test Coverage Analysis" > comment_body.md
+          echo "### Coverage Summary" >> comment_body.md
+          echo "$UNCOVERED_LINES" | grep "Total:" -A 3 >> comment_body.md
           echo "" >> comment_body.md
-          echo "$UNCOVERED_LINES" >> comment_body.md
-          echo "" >> comment_body.md
-          echo "Suggested tests to add:" >> comment_body.md
 
-          # Generate test code for each uncovered line
+          echo "### Detailed Test Suggestions" >> comment_body.md
+
+          # Process each file's uncovered lines
           while IFS= read -r line; do
             if [[ $line == *"src/"* ]]; then
               FILE=$(echo $line | cut -d':' -f1)
-              LINE=$(echo $line | cut -d':' -f2)
-              echo "### $FILE:$LINE" >> comment_body.md
+              LINES=$(echo $line | cut -d':' -f2-)
+              
+              # Get the actual code for these lines
+              CODE_CONTEXT=$(sed -n "$(echo $LINES | sed 's/,/p;/g' | sed 's/$/p/')" "$FILE")
+              
+              echo "#### $FILE" >> comment_body.md
+              echo "Uncovered lines: $LINES" >> comment_body.md
+              echo "" >> comment_body.md
+              
+              echo "**Code Context:**" >> comment_body.md
               echo '```python' >> comment_body.md
-              echo "# TODO: Add test for this line" >> comment_body.md
-              echo "def test_$(basename $FILE .py)_line_$LINE():" >> comment_body.md
-              echo "    # Add test implementation here" >> comment_body.md
+              echo "$CODE_CONTEXT" >> comment_body.md
               echo '```' >> comment_body.md
               echo "" >> comment_body.md
+              
+              # Generate specific test cases based on the code
+              echo "**Suggested Test Cases:**" >> comment_body.md
+              echo '```python' >> comment_body.md
+              echo "def test_$(basename $FILE .py)_coverage():" >> comment_body.md
+              echo "    # Test setup" >> comment_body.md
+              echo "    test_data = {" >> comment_body.md
+              
+              # Add test data based on the code context
+              if [[ "$CODE_CONTEXT" == *"if"* ]]; then
+                echo "        'condition_true': True," >> comment_body.md
+                echo "        'condition_false': False," >> comment_body.md
+              fi
+              if [[ "$CODE_CONTEXT" == *"for"* ]]; then
+                echo "        'empty_list': []," >> comment_body.md
+                echo "        'single_item': [1]," >> comment_body.md
+                echo "        'multiple_items': [1, 2, 3]," >> comment_body.md
+              fi
+              if [[ "$CODE_CONTEXT" == *"try"* ]]; then
+                echo "        'valid_input': 'valid'," >> comment_body.md
+                echo "        'invalid_input': None," >> comment_body.md
+              fi
+              
+              echo "    }" >> comment_body.md
+              echo "" >> comment_body.md
+              echo "    # Test cases" >> comment_body.md
+              echo "    for scenario, data in test_data.items():" >> comment_body.md
+              echo "        with pytest.subTest(scenario=scenario):" >> comment_body.md
+              echo "            result = function_to_test(data)" >> comment_body.md
+              echo "            assert result is not None" >> comment_body.md
+              echo '```' >> comment_body.md
+              echo "" >> comment_body.md
+              
+              # Generate actual test file
+              TEST_FILE="src/test_$(basename $FILE .py)_coverage.py"
+              echo 'import pytest' > "$TEST_FILE"
+              echo "from $(basename $FILE .py) import *" >> "$TEST_FILE"
+              echo "" >> "$TEST_FILE"
+              echo "def test_$(basename $FILE .py)_coverage():" >> "$TEST_FILE"
+              echo "    # Test setup" >> "$TEST_FILE"
+              echo "    test_data = {" >> "$TEST_FILE"
+              
+              # Add test data to the actual test file
+              if [[ "$CODE_CONTEXT" == *"if"* ]]; then
+                echo "        'condition_true': True," >> "$TEST_FILE"
+                echo "        'condition_false': False," >> "$TEST_FILE"
+              fi
+              if [[ "$CODE_CONTEXT" == *"for"* ]]; then
+                echo "        'empty_list': []," >> "$TEST_FILE"
+                echo "        'single_item': [1]," >> "$TEST_FILE"
+                echo "        'multiple_items': [1, 2, 3]," >> "$TEST_FILE"
+              fi
+              if [[ "$CODE_CONTEXT" == *"try"* ]]; then
+                echo "        'valid_input': 'valid'," >> "$TEST_FILE"
+                echo "        'invalid_input': None," >> "$TEST_FILE"
+              fi
+              
+              echo "    }" >> "$TEST_FILE"
+              echo "" >> "$TEST_FILE"
+              echo "    # Test cases" >> "$TEST_FILE"
+              echo "    for scenario, data in test_data.items():" >> "$TEST_FILE"
+              echo "        with pytest.subTest(scenario=scenario):" >> "$TEST_FILE"
+              echo "            result = function_to_test(data)" >> "$TEST_FILE"
+              echo "            assert result is not None" >> "$TEST_FILE"
             fi
           done <<< "$UNCOVERED_LINES"
 
@@ -98,9 +168,17 @@ jobs:
               });
             } catch (error) {
               console.error('Error creating comment:', error);
-              // Log the error but don't fail the workflow
               process.exit(0);
             }
+
+      - name: Create test commit
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add src/test_*_coverage.py
+          git commit -m "Add test coverage for uncovered lines" || true
+          git push || true
 
       - name: Upload coverage to Codecov
         if: always() # Run this step even if previous steps fail
