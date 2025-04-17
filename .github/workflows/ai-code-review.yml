@@ -25,17 +25,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/requirements/ai-code-review.txt
 
-      - name: Debug OpenAI API Key
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "Error: OPENAI_API_KEY is empty or not set"
-            exit 1
-          fi
-          echo "OpenAI API Key (first 4 chars): ${OPENAI_API_KEY:0:4}..."
-          echo "OpenAI API Key length: ${#OPENAI_API_KEY}"
-
       - name: Run AI Code Review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -43,8 +32,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "Error: OPENAI_API_KEY is not set in the environment"
-            exit 1
-          fi
           python .github/scripts/ai_code_review.py
