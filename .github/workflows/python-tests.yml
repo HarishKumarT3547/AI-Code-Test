@@ -122,16 +122,27 @@ jobs:
           # Create Python script
           echo 'import os' > generate_tests.py
           echo 'import re' >> generate_tests.py
+          echo 'from datetime import datetime' >> generate_tests.py
           echo '' >> generate_tests.py
           echo 'def sanitize_filename(name):' >> generate_tests.py
           echo '    # Remove any non-alphanumeric characters except underscores' >> generate_tests.py
           echo '    return re.sub(r"[^a-zA-Z0-9_]", "_", name)' >> generate_tests.py
           echo '' >> generate_tests.py
           echo 'def generate_test_file(module_name, lines):' >> generate_tests.py
-          echo '    # Create a valid Python module name' >> generate_tests.py
+          echo '    # Create test recommendations directory if it doesnt exist' >> generate_tests.py
+          echo '    test_dir = "src/test_recommendations"' >> generate_tests.py
+          echo '    os.makedirs(test_dir, exist_ok=True)' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '    # Create a valid Python module name with timestamp' >> generate_tests.py
+          echo '    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")' >> generate_tests.py
           echo '    sanitized_name = sanitize_filename(module_name)' >> generate_tests.py
-          echo '    test_module_name = f"test_{sanitized_name}_coverage"' >> generate_tests.py
-          echo '    test_file = f"src/{test_module_name}.py"' >> generate_tests.py
+          echo '    test_module_name = f"test_{sanitized_name}_{timestamp}"' >> generate_tests.py
+          echo '    test_file = os.path.join(test_dir, f"{test_module_name}.py")' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '    # Check if file exists and delete it' >> generate_tests.py
+          echo '    if os.path.exists(test_file):' >> generate_tests.py
+          echo '        os.remove(test_file)' >> generate_tests.py
+          echo '' >> generate_tests.py
           echo '    with open(test_file, "w") as f:' >> generate_tests.py
           echo '        f.write(f"""import pytest' >> generate_tests.py
           echo 'import sys' >> generate_tests.py
@@ -203,9 +214,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           # Check if any test files were created
-          if [ -n "$(find src -name 'test_*_coverage.py')" ]; then
-            git add src/test_*_coverage.py
-            git commit -m "Add test coverage for uncovered lines"
+          if [ -n "$(find src/test_recommendations -name 'test_*.py')" ]; then
+            git add src/test_recommendations/
+            git commit -m "Add test coverage recommendations"
             git push origin HEAD:${{ github.head_ref }}
           else
             echo "No test files were created to commit"
