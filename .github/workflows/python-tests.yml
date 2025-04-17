@@ -121,17 +121,22 @@ jobs:
         run: |
           # Create Python script
           echo 'import os' > generate_tests.py
-          echo 'import sys' >> generate_tests.py
+          echo 'import re' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo 'def sanitize_filename(name):' >> generate_tests.py
+          echo '    # Remove any non-alphanumeric characters except underscores' >> generate_tests.py
+          echo '    return re.sub(r"[^a-zA-Z0-9_]", "_", name)' >> generate_tests.py
           echo '' >> generate_tests.py
           echo 'def generate_test_file(module_name, lines):' >> generate_tests.py
           echo '    # Create a valid Python module name' >> generate_tests.py
-          echo '    test_module_name = f"test_{module_name}_coverage"' >> generate_tests.py
+          echo '    sanitized_name = sanitize_filename(module_name)' >> generate_tests.py
+          echo '    test_module_name = f"test_{sanitized_name}_coverage"' >> generate_tests.py
           echo '    test_file = f"src/{test_module_name}.py"' >> generate_tests.py
           echo '    with open(test_file, "w") as f:' >> generate_tests.py
           echo '        f.write(f"""import pytest' >> generate_tests.py
           echo 'from {module_name} import *' >> generate_tests.py
           echo '' >> generate_tests.py
-          echo 'def test_{module_name}_coverage():' >> generate_tests.py
+          echo 'def test_{sanitized_name}_coverage():' >> generate_tests.py
           echo '    # Test setup' >> generate_tests.py
           echo '    test_data = {{' >> generate_tests.py
           echo '' >> generate_tests.py
