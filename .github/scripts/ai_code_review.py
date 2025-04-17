@@ -76,7 +76,7 @@ def analyze_code_with_ai(diff: str, rules: List[Dict]) -> List[Dict]:
         """
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a code review assistant that helps identify code that violates specific rules."},
                 {"role": "user", "content": prompt}
