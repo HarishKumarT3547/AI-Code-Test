@@ -72,7 +72,12 @@ jobs:
               LINES=$(echo $line | cut -d':' -f2-)
               
               # Get the actual code for these lines
-              CODE_CONTEXT=$(sed -n "$(echo $LINES | sed 's/,/p;/g' | sed 's/$/p/')" "$FILE")
+              LINE_NUMBERS=$(echo $LINES | tr ',' '\n' | tr '-' '\n' | sort -n | uniq)
+              CODE_CONTEXT=""
+              for LINE in $LINE_NUMBERS; do
+                CODE_CONTEXT+=$(sed -n "${LINE}p" "$FILE")
+                CODE_CONTEXT+=$'\n'
+              done
               
               echo "#### $FILE" >> comment_body.md
               echo "Uncovered lines: $LINES" >> comment_body.md
@@ -115,38 +120,6 @@ jobs:
               echo "            assert result is not None" >> comment_body.md
               echo '```' >> comment_body.md
               echo "" >> comment_body.md
-              
-              # Generate actual test file
-              TEST_FILE="src/test_$(basename $FILE .py)_coverage.py"
-              echo 'import pytest' > "$TEST_FILE"
-              echo "from $(basename $FILE .py) import *" >> "$TEST_FILE"
-              echo "" >> "$TEST_FILE"
-              echo "def test_$(basename $FILE .py)_coverage():" >> "$TEST_FILE"
-              echo "    # Test setup" >> "$TEST_FILE"
-              echo "    test_data = {" >> "$TEST_FILE"
-              
-              # Add test data to the actual test file
-              if [[ "$CODE_CONTEXT" == *"if"* ]]; then
-                echo "        'condition_true': True," >> "$TEST_FILE"
-                echo "        'condition_false': False," >> "$TEST_FILE"
-              fi
-              if [[ "$CODE_CONTEXT" == *"for"* ]]; then
-                echo "        'empty_list': []," >> "$TEST_FILE"
-                echo "        'single_item': [1]," >> "$TEST_FILE"
-                echo "        'multiple_items': [1, 2, 3]," >> "$TEST_FILE"
-              fi
-              if [[ "$CODE_CONTEXT" == *"try"* ]]; then
-                echo "        'valid_input': 'valid'," >> "$TEST_FILE"
-                echo "        'invalid_input': None," >> "$TEST_FILE"
-              fi
-              
-              echo "    }" >> "$TEST_FILE"
-              echo "" >> "$TEST_FILE"
-              echo "    # Test cases" >> "$TEST_FILE"
-              echo "    for scenario, data in test_data.items():" >> "$TEST_FILE"
-              echo "        with pytest.subTest(scenario=scenario):" >> "$TEST_FILE"
-              echo "            result = function_to_test(data)" >> "$TEST_FILE"
-              echo "            assert result is not None" >> "$TEST_FILE"
             fi
           done <<< "$UNCOVERED_LINES"
 
@@ -170,15 +143,6 @@ jobs:
               console.error('Error creating comment:', error);
               process.exit(0);
             }
-
-      - name: Create test commit
-        if: always() && github.event_name == 'pull_request'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add src/test_*_coverage.py
-          git commit -m "Add test coverage for uncovered lines" || true
-          git push || true
 
       - name: Upload coverage to Codecov
         if: always() # Run this step even if previous steps fail
