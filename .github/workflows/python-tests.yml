@@ -1,8 +1,6 @@
 name: Python Tests
 
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -42,17 +40,14 @@ jobs:
 
       - name: Check diff coverage
         run: |
-          # Get the base branch for comparison
-          BASE_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          if [[ "$BASE_BRANCH" == "HEAD" ]]; then
-            BASE_BRANCH="main"
-          fi
+          # Fetch the base branch
+          git fetch origin ${{ github.base_ref }}
 
-          # Run diff coverage
-          diff-cover coverage.xml --compare-branch=origin/$BASE_BRANCH --html-report report.html
+          # Run diff coverage against the base branch
+          diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --html-report report.html
 
           # Extract uncovered lines
-          UNCOVERED_LINES=$(diff-cover coverage.xml --compare-branch=origin/$BASE_BRANCH --json-report report.json)
+          UNCOVERED_LINES=$(diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --json-report report.json)
 
           # Save uncovered lines to a file
           echo "$UNCOVERED_LINES" > uncovered_lines.txt
