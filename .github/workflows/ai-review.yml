@@ -1,4 +1,4 @@
-name: AI Code Review
+name: Code Review
 
 on:
   pull_request:
@@ -22,22 +22,68 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pylint black
+          pip install pylint black bandit mypy
 
       - name: Run code analysis
         id: analysis
         run: |
-          # Run pylint and capture output
-          pylint_output=$(pylint src/ --output-format=json || true)
+          # Create analysis results directory
+          mkdir -p analysis_results
 
-          # Run black in check mode
-          black_output=$(black --check src/ || true)
+          # Run pylint for Python code
+          pylint src/ --output-format=json > analysis_results/pylint.json || true
 
-          # Combine outputs into a single JSON
-          echo "{\"pylint\": $pylint_output, \"black\": \"$black_output\"}" > analysis_results.json
+          # Run black for code formatting
+          black --check src/ > analysis_results/black.txt || true
 
-          # Output the results
-          cat analysis_results.json
+          # Run bandit for security issues
+          bandit -r src/ -f json -o analysis_results/bandit.json || true
+
+          # Run mypy for type checking
+          mypy src/ --json-report analysis_results/mypy || true
+
+          # Create a summary file
+          echo "# Code Analysis Summary" > analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+
+          # Add pylint results
+          echo "## Pylint Analysis" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/pylint.json ]; then
+            jq -r '.[] | "### \(.path)\n\(.message) (Line \(.line))"' analysis_results/pylint.json >> analysis_results/summary.md
+          else
+            echo "No issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add black results
+          echo "## Code Formatting" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/black.txt ]; then
+            cat analysis_results/black.txt >> analysis_results/summary.md
+          else
+            echo "No formatting issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add bandit results
+          echo "## Security Analysis" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/bandit.json ]; then
+            jq -r '.results[] | "### \(.filename)\n\(.issue_text) (Line \(.line_number))"' analysis_results/bandit.json >> analysis_results/summary.md
+          else
+            echo "No security issues found" >> analysis_results/summary.md
+          fi
+          echo "" >> analysis_results/summary.md
+
+          # Add mypy results
+          echo "## Type Checking" >> analysis_results/summary.md
+          echo "" >> analysis_results/summary.md
+          if [ -s analysis_results/mypy/index.json ]; then
+            jq -r '.files[] | "### \(.path)\n\(.messages[] | "\(.message) (Line \(.line))")"' analysis_results/mypy/index.json >> analysis_results/summary.md
+          else
+            echo "No type checking issues found" >> analysis_results/summary.md
+          fi
 
       - name: Create review comment
         uses: actions/github-script@v6
@@ -46,32 +92,18 @@ jobs:
           script: |
             const fs = require('fs');
             try {
-              const analysisResults = JSON.parse(fs.readFileSync('analysis_results.json', 'utf8'));
+              const summary = fs.readFileSync('analysis_results/summary.md', 'utf8');
               
-              let comment = '## Code Analysis Results\n\n';
-              
-              if (analysisResults.pylint && analysisResults.pylint.length > 0) {
-                comment += '### Pylint Issues\n';
-                analysisResults.pylint.forEach(issue => {
-                  comment += `- ${issue.message} (${issue.path}:${issue.line})\n`;
-                });
-              }
-              
-              if (analysisResults.black) {
-                comment += '\n### Black Formatting Issues\n';
-                comment += analysisResults.black;
-              }
-              
-              github.rest.pulls.createReview({
+              await github.rest.pulls.createReview({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.issue.number,
-                body: comment,
+                body: summary,
                 event: 'COMMENT'
               });
             } catch (error) {
-              console.error('Error processing analysis results:', error);
-              github.rest.pulls.createReview({
+              console.error('Error creating review:', error);
+              await github.rest.pulls.createReview({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.issue.number,
@@ -79,3 +111,10 @@ jobs:
                 event: 'COMMENT'
               });
             }
+
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v3
+        with:
+          name: analysis-results
+          path: analysis_results/
+          retention-days: 5
