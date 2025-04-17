@@ -69,6 +69,8 @@ jobs:
           while IFS= read -r line; do
             if [[ $line == *"src/"* ]]; then
               FILE=$(echo $line | cut -d':' -f1)
+              FILENAME=$(basename "$FILE")
+              MODULE_NAME="${FILENAME%.*}"
               LINES=$(echo $line | cut -d':' -f2-)
               
               echo "#### $FILE" >> comment_body.md
@@ -78,7 +80,7 @@ jobs:
               # Generate test suggestions based on line numbers
               echo "**Suggested Test Cases:**" >> comment_body.md
               echo '```python' >> comment_body.md
-              echo "def test_$(basename $FILE .py)_coverage():" >> comment_body.md
+              echo "def test_${MODULE_NAME}_coverage():" >> comment_body.md
               echo "    # Test setup" >> comment_body.md
               echo "    test_data = {" >> comment_body.md
               
@@ -113,11 +115,11 @@ jobs:
               echo "" >> comment_body.md
 
               # Create test file for uncovered lines
-              TEST_FILE="src/test_$(basename $FILE .py)_coverage.py"
+              TEST_FILE="src/test_${MODULE_NAME}_coverage.py"
               echo "import pytest" > "$TEST_FILE"
-              echo "from $(basename $FILE .py) import *" >> "$TEST_FILE"
+              echo "from ${MODULE_NAME} import *" >> "$TEST_FILE"
               echo "" >> "$TEST_FILE"
-              echo "def test_$(basename $FILE .py)_coverage():" >> "$TEST_FILE"
+              echo "def test_${MODULE_NAME}_coverage():" >> "$TEST_FILE"
               echo "    # Test setup" >> "$TEST_FILE"
               echo "    test_data = {" >> "$TEST_FILE"
               
@@ -177,9 +179,14 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add src/test_*_coverage.py
-          git commit -m "Add test coverage for uncovered lines" || true
-          git push || true
+          # Check if any test files were created
+          if [ -n "$(find src -name 'test_*_coverage.py')" ]; then
+            git add src/test_*_coverage.py
+            git commit -m "Add test coverage for uncovered lines"
+            git push
+          else
+            echo "No test files were created to commit"
+          fi
 
       - name: Upload coverage to Codecov
         if: always() # Run this step even if previous steps fail
