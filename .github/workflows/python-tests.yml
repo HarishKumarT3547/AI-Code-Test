@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0 # Required for diff coverage
+          ref: ${{ github.head_ref }} # Checkout the PR branch
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -183,7 +184,7 @@ jobs:
           if [ -n "$(find src -name 'test_*_coverage.py')" ]; then
             git add src/test_*_coverage.py
             git commit -m "Add test coverage for uncovered lines"
-            git push
+            git push origin HEAD:${{ github.head_ref }}
           else
             echo "No test files were created to commit"
           fi
