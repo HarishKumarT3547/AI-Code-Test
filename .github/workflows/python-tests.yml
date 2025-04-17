@@ -57,80 +57,47 @@ jobs:
           # Save uncovered lines to a file
           echo "$UNCOVERED_LINES" > uncovered_lines.txt
 
-      - name: Generate test suggestions
-        id: generate_tests
-        run: |
-          # Read uncovered lines
-          UNCOVERED=$(cat uncovered_lines.txt)
+          # Generate the comment body
+          echo "## Missing Test Coverage" > comment_body.md
+          echo "The following lines need test coverage:" >> comment_body.md
+          echo "" >> comment_body.md
+          echo "$UNCOVERED_LINES" >> comment_body.md
+          echo "" >> comment_body.md
+          echo "Suggested tests to add:" >> comment_body.md
 
-          if [ -n "$UNCOVERED" ]; then
-            # Generate test suggestions
-            echo "## Missing Test Coverage" > test_suggestions.md
-            echo "The following lines need test coverage:" >> test_suggestions.md
-            echo "" >> test_suggestions.md
-            echo "$UNCOVERED" >> test_suggestions.md
-            echo "" >> test_suggestions.md
-            echo "Suggested tests to add:" >> test_suggestions.md
-            
-            # Generate test code for each uncovered line
-            while IFS= read -r line; do
-              if [[ $line == *"src/"* ]]; then
-                FILE=$(echo $line | cut -d':' -f1)
-                LINE=$(echo $line | cut -d':' -f2)
-                echo "### $FILE:$LINE" >> test_suggestions.md
-                echo '```python' >> test_suggestions.md
-                echo "# TODO: Add test for this line" >> test_suggestions.md
-                echo "def test_$(basename $FILE .py)_line_$LINE():" >> test_suggestions.md
-                echo "    # Add test implementation here" >> test_suggestions.md
-                echo '```' >> test_suggestions.md
-                echo "" >> test_suggestions.md
-              fi
-            done <<< "$UNCOVERED"
-          fi
+          # Generate test code for each uncovered line
+          while IFS= read -r line; do
+            if [[ $line == *"src/"* ]]; then
+              FILE=$(echo $line | cut -d':' -f1)
+              LINE=$(echo $line | cut -d':' -f2)
+              echo "### $FILE:$LINE" >> comment_body.md
+              echo '```python' >> comment_body.md
+              echo "# TODO: Add test for this line" >> comment_body.md
+              echo "def test_$(basename $FILE .py)_line_$LINE():" >> comment_body.md
+              echo "    # Add test implementation here" >> comment_body.md
+              echo '```' >> comment_body.md
+              echo "" >> comment_body.md
+            fi
+          done <<< "$UNCOVERED_LINES"
 
-      - name: Create or update PR comment
+      - name: Create PR comment
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             try {
-              if (fs.existsSync('test_suggestions.md')) {
-                const suggestions = fs.readFileSync('test_suggestions.md', 'utf8');
-                
-                // Get existing comments
-                const { data: comments } = await github.rest.issues.listComments({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number
-                });
-                
-                // Find our previous comment
-                const previousComment = comments.find(comment => 
-                  comment.user.login === 'github-actions[bot]' &&
-                  comment.body.includes('Missing Test Coverage')
-                );
-                
-                if (previousComment) {
-                  // Update existing comment
-                  await github.rest.issues.updateComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: previousComment.id,
-                    body: suggestions
-                  });
-                } else {
-                  // Create new comment
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: suggestions
-                  });
-                }
-              }
+              const commentBody = fs.readFileSync('comment_body.md', 'utf8');
+              
+              // Create a new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
             } catch (error) {
-              console.error('Error creating/updating comment:', error);
+              console.error('Error creating comment:', error);
               // Log the error but don't fail the workflow
               process.exit(0);
             }
