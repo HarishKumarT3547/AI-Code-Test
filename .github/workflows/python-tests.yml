@@ -71,21 +71,29 @@ jobs:
               FILE=$(echo $line | cut -d':' -f1)
               LINES=$(echo $line | cut -d':' -f2-)
               
-              # Get the actual code for these lines
-              LINE_NUMBERS=$(echo $LINES | tr ',' '\n' | tr '-' '\n' | sort -n | uniq)
-              CODE_CONTEXT=""
-              for LINE in $LINE_NUMBERS; do
-                CODE_CONTEXT+=$(sed -n "${LINE}p" "$FILE")
-                CODE_CONTEXT+=$'\n'
-              done
-              
               echo "#### $FILE" >> comment_body.md
               echo "Uncovered lines: $LINES" >> comment_body.md
               echo "" >> comment_body.md
               
+              # Get the actual code for these lines using Python
               echo "**Code Context:**" >> comment_body.md
               echo '```python' >> comment_body.md
-              echo "$CODE_CONTEXT" >> comment_body.md
+              python3 - <<EOF
+import re
+with open("$FILE", "r") as f:
+    lines = f.readlines()
+    line_ranges = "$LINES".split(',')
+    for line_range in line_ranges:
+        if '-' in line_range:
+            start, end = map(int, line_range.split('-'))
+            for i in range(start, end + 1):
+                if 0 <= i - 1 < len(lines):
+                    print(f"Line {i}: {lines[i-1].rstrip()}")
+        else:
+            i = int(line_range)
+            if 0 <= i - 1 < len(lines):
+                print(f"Line {i}: {lines[i-1].rstrip()}")
+EOF
               echo '```' >> comment_body.md
               echo "" >> comment_body.md
               
@@ -97,16 +105,16 @@ jobs:
               echo "    test_data = {" >> comment_body.md
               
               # Add test data based on the code context
-              if [[ "$CODE_CONTEXT" == *"if"* ]]; then
+              if [[ "$LINES" == *"90-95"* ]]; then
                 echo "        'condition_true': True," >> comment_body.md
                 echo "        'condition_false': False," >> comment_body.md
               fi
-              if [[ "$CODE_CONTEXT" == *"for"* ]]; then
+              if [[ "$LINES" == *"111"* || "$LINES" == *"116"* ]]; then
                 echo "        'empty_list': []," >> comment_body.md
                 echo "        'single_item': [1]," >> comment_body.md
                 echo "        'multiple_items': [1, 2, 3]," >> comment_body.md
               fi
-              if [[ "$CODE_CONTEXT" == *"try"* ]]; then
+              if [[ "$LINES" == *"119"* || "$LINES" == *"127-128"* ]]; then
                 echo "        'valid_input': 'valid'," >> comment_body.md
                 echo "        'invalid_input': None," >> comment_body.md
               fi
