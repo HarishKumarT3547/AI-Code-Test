@@ -124,7 +124,9 @@ jobs:
           echo 'import sys' >> generate_tests.py
           echo '' >> generate_tests.py
           echo 'def generate_test_file(module_name, lines):' >> generate_tests.py
-          echo '    test_file = f"src/test_{module_name}_coverage.py"' >> generate_tests.py
+          echo '    # Create a valid Python module name' >> generate_tests.py
+          echo '    test_module_name = f"test_{module_name}_coverage"' >> generate_tests.py
+          echo '    test_file = f"src/{test_module_name}.py"' >> generate_tests.py
           echo '    with open(test_file, "w") as f:' >> generate_tests.py
           echo '        f.write(f"""import pytest' >> generate_tests.py
           echo 'from {module_name} import *' >> generate_tests.py
