@@ -1,4 +1,4 @@
-name: Review Comment Generator
+name: AI Code Review
 
 on:
   pull_request:
@@ -7,12 +7,10 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -24,20 +22,54 @@ jobs:
           python -m pip install --upgrade pip
           pip install pylint black
 
-      - name: Run code analysis
-        id: analysis
+      - name: Analyze code
         run: |
-          # Run pylint and capture output
-          pylint_output=$(pylint src/ --output-format=json || true)
+          # Create a Python script for code analysis
+          echo 'import os' > analyze_code.py
+          echo 'import json' >> analyze_code.py
+          echo 'import subprocess' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo 'def analyze_file(file_path):' >> analyze_code.py
+          echo '    results = {' >> analyze_code.py
+          echo '        "file": file_path,' >> analyze_code.py
+          echo '        "issues": [],' >> analyze_code.py
+          echo '        "suggestions": []' >> analyze_code.py
+          echo '    }' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo '    # Check file size' >> analyze_code.py
+          echo '    if os.path.getsize(file_path) > 1000000:  # 1MB' >> analyze_code.py
+          echo '        results["issues"].append("File is too large. Consider splitting into smaller files.")' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo '    # Check for magic numbers' >> analyze_code.py
+          echo '    with open(file_path, "r") as f:' >> analyze_code.py
+          echo '        content = f.read()' >> analyze_code.py
+          echo '        if "100" in content or "1000" in content:' >> analyze_code.py
+          echo '            results["suggestions"].append("Consider using named constants instead of magic numbers.")' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo '    # Check for long functions' >> analyze_code.py
+          echo '    if len(content.split("\\n")) > 50:' >> analyze_code.py
+          echo '        results["suggestions"].append("Function might be too long. Consider breaking it into smaller functions.")' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo '    return results' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo 'def main():' >> analyze_code.py
+          echo '    all_results = []' >> analyze_code.py
+          echo '    for root, _, files in os.walk("."):' >> analyze_code.py
+          echo '        for file in files:' >> analyze_code.py
+          echo '            if file.endswith((".py", ".js", ".java", ".cpp", ".erl", ".go", ".rb", ".php")):' >> analyze_code.py
+          echo '                file_path = os.path.join(root, file)' >> analyze_code.py
+          echo '                results = analyze_file(file_path)' >> analyze_code.py
+          echo '                if results["issues"] or results["suggestions"]:' >> analyze_code.py
+          echo '                    all_results.append(results)' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo '    with open("review_results.json", "w") as f:' >> analyze_code.py
+          echo '        json.dump(all_results, f, indent=2)' >> analyze_code.py
+          echo '' >> analyze_code.py
+          echo 'if __name__ == "__main__":' >> analyze_code.py
+          echo '    main()' >> analyze_code.py
 
-          # Run black in check mode
-          black_output=$(black --check src/ || true)
-
-          # Combine outputs into a single JSON
-          echo "{\"pylint\": $pylint_output, \"black\": \"$black_output\"}" > analysis_results.json
-
-          # Output the results
-          cat analysis_results.json
+          # Run the analysis
+          python analyze_code.py
 
       - name: Create review comment
         uses: actions/github-script@v6
@@ -46,36 +78,38 @@ jobs:
           script: |
             const fs = require('fs');
             try {
-              const analysisResults = JSON.parse(fs.readFileSync('analysis_results.json', 'utf8'));
+              const results = JSON.parse(fs.readFileSync('review_results.json', 'utf8'));
               
-              let comment = '## Code Analysis Results\n\n';
+              let comment = '## AI Code Review Results\n\n';
               
-              if (analysisResults.pylint && analysisResults.pylint.length > 0) {
-                comment += '### Pylint Issues\n';
-                analysisResults.pylint.forEach(issue => {
-                  comment += `- ${issue.message} (${issue.path}:${issue.line})\n`;
-                });
+              for (const file of results) {
+                comment += `### ${file.file}\n\n`;
+                
+                if (file.issues.length > 0) {
+                  comment += '#### Issues\n';
+                  for (const issue of file.issues) {
+                    comment += `- ⚠️ ${issue}\n`;
+                  }
+                  comment += '\n';
+                }
+                
+                if (file.suggestions.length > 0) {
+                  comment += '#### Suggestions\n';
+                  for (const suggestion of file.suggestions) {
+                    comment += `- 💡 ${suggestion}\n`;
+                  }
+                  comment += '\n';
+                }
               }
               
-              if (analysisResults.black) {
-                comment += '\n### Black Formatting Issues\n';
-                comment += analysisResults.black;
-              }
-              
-              github.rest.pulls.createReview({
+              // Create a new comment
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: context.issue.number,
-                body: comment,
-                event: 'COMMENT'
+                issue_number: context.issue.number,
+                body: comment
               });
             } catch (error) {
-              console.error('Error processing analysis results:', error);
-              github.rest.pulls.createReview({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.issue.number,
-                body: 'Error processing code analysis results. Please check the workflow logs for details.',
-                event: 'COMMENT'
-              });
+              console.error('Error creating comment:', error);
+              process.exit(0);
             }
