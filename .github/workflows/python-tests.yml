@@ -114,45 +114,57 @@ jobs:
               echo "            assert result is not None" >> comment_body.md
               echo '```' >> comment_body.md
               echo "" >> comment_body.md
-
-              # Create test file for uncovered lines
-              TEST_FILE="src/test_${MODULE_NAME}_coverage.py"
-              echo "import pytest" > "$TEST_FILE"
-              echo "from ${MODULE_NAME} import *" >> "$TEST_FILE"
-              echo "" >> "$TEST_FILE"
-              echo "def test_${MODULE_NAME}_coverage():" >> "$TEST_FILE"
-              echo "    # Test setup" >> "$TEST_FILE"
-              echo "    test_data = {" >> "$TEST_FILE"
-              
-              # Add test data based on line numbers
-              if [[ "$LINES" == *"90-95"* ]]; then
-                echo "        # Test data for lines 90-95" >> "$TEST_FILE"
-                echo "        'null_input': None," >> "$TEST_FILE"
-                echo "        'valid_input': {'key': 'value'}," >> "$TEST_FILE"
-              fi
-              
-              if [[ "$LINES" == *"111"* || "$LINES" == *"116"* ]]; then
-                echo "        # Test data for lines 111,116" >> "$TEST_FILE"
-                echo "        'empty_list': []," >> "$TEST_FILE"
-                echo "        'single_item': [1]," >> "$TEST_FILE"
-                echo "        'multiple_items': [1, 2, 3]," >> "$TEST_FILE"
-              fi
-              
-              if [[ "$LINES" == *"119"* || "$LINES" == *"127-128"* ]]; then
-                echo "        # Test data for lines 119,127-128" >> "$TEST_FILE"
-                echo "        'valid_input': 'valid'," >> "$TEST_FILE"
-                echo "        'invalid_input': None," >> "$TEST_FILE"
-              fi
-              
-              echo "    }" >> "$TEST_FILE"
-              echo "" >> "$TEST_FILE"
-              echo "    # Test cases" >> "$TEST_FILE"
-              echo "    for scenario, data in test_data.items():" >> "$TEST_FILE"
-              echo "        with pytest.subTest(scenario=scenario):" >> "$TEST_FILE"
-              echo "            result = function_to_test(data)" >> "$TEST_FILE"
-              echo "            assert result is not None" >> "$TEST_FILE"
             fi
           done <<< "$UNCOVERED_LINES"
+
+      - name: Create test files
+        run: |
+          # Create Python script
+          echo 'import os' > generate_tests.py
+          echo 'import sys' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo 'def generate_test_file(module_name, lines):' >> generate_tests.py
+          echo '    test_file = f"src/test_{module_name}_coverage.py"' >> generate_tests.py
+          echo '    with open(test_file, "w") as f:' >> generate_tests.py
+          echo '        f.write(f"""import pytest' >> generate_tests.py
+          echo 'from {module_name} import *' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo 'def test_{module_name}_coverage():' >> generate_tests.py
+          echo '    # Test setup' >> generate_tests.py
+          echo '    test_data = {{' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '        # Test data for lines 90-95' >> generate_tests.py
+          echo "        'null_input': None," >> generate_tests.py
+          echo "        'valid_input': {'key': 'value'}," >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '        # Test data for lines 111,116' >> generate_tests.py
+          echo "        'empty_list': []," >> generate_tests.py
+          echo "        'single_item': [1]," >> generate_tests.py
+          echo "        'multiple_items': [1, 2, 3]," >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '        # Test data for lines 119,127-128' >> generate_tests.py
+          echo "        'valid_input': 'valid'," >> generate_tests.py
+          echo "        'invalid_input': None," >> generate_tests.py
+          echo '    }}' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '    # Test cases' >> generate_tests.py
+          echo '    for scenario, data in test_data.items():' >> generate_tests.py
+          echo '        with pytest.subTest(scenario=scenario):' >> generate_tests.py
+          echo '            result = function_to_test(data)' >> generate_tests.py
+          echo '            assert result is not None' >> generate_tests.py
+          echo '""")' >> generate_tests.py
+          echo '' >> generate_tests.py
+          echo '# Process uncovered lines' >> generate_tests.py
+          echo 'with open("uncovered_lines.txt", "r") as f:' >> generate_tests.py
+          echo '    for line in f:' >> generate_tests.py
+          echo '        if "src/" in line:' >> generate_tests.py
+          echo '            file_path = line.split(":")[0]' >> generate_tests.py
+          echo '            module_name = os.path.splitext(os.path.basename(file_path))[0]' >> generate_tests.py
+          echo '            lines = line.split(":")[1]' >> generate_tests.py
+          echo '            generate_test_file(module_name, lines)' >> generate_tests.py
+
+          # Run the Python script
+          python3 generate_tests.py
 
       - name: Create PR comment
         uses: actions/github-script@v6
