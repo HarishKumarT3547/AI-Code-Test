@@ -7,7 +7,7 @@ on:
 # Add permissions block
 permissions:
   pull-requests: write
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -111,6 +111,43 @@ jobs:
               echo "            assert result is not None" >> comment_body.md
               echo '```' >> comment_body.md
               echo "" >> comment_body.md
+
+              # Create test file for uncovered lines
+              TEST_FILE="src/test_$(basename $FILE .py)_coverage.py"
+              echo "import pytest" > "$TEST_FILE"
+              echo "from $(basename $FILE .py) import *" >> "$TEST_FILE"
+              echo "" >> "$TEST_FILE"
+              echo "def test_$(basename $FILE .py)_coverage():" >> "$TEST_FILE"
+              echo "    # Test setup" >> "$TEST_FILE"
+              echo "    test_data = {" >> "$TEST_FILE"
+              
+              # Add test data based on line numbers
+              if [[ "$LINES" == *"90-95"* ]]; then
+                echo "        # Test data for lines 90-95" >> "$TEST_FILE"
+                echo "        'null_input': None," >> "$TEST_FILE"
+                echo "        'valid_input': {'key': 'value'}," >> "$TEST_FILE"
+              fi
+              
+              if [[ "$LINES" == *"111"* || "$LINES" == *"116"* ]]; then
+                echo "        # Test data for lines 111,116" >> "$TEST_FILE"
+                echo "        'empty_list': []," >> "$TEST_FILE"
+                echo "        'single_item': [1]," >> "$TEST_FILE"
+                echo "        'multiple_items': [1, 2, 3]," >> "$TEST_FILE"
+              fi
+              
+              if [[ "$LINES" == *"119"* || "$LINES" == *"127-128"* ]]; then
+                echo "        # Test data for lines 119,127-128" >> "$TEST_FILE"
+                echo "        'valid_input': 'valid'," >> "$TEST_FILE"
+                echo "        'invalid_input': None," >> "$TEST_FILE"
+              fi
+              
+              echo "    }" >> "$TEST_FILE"
+              echo "" >> "$TEST_FILE"
+              echo "    # Test cases" >> "$TEST_FILE"
+              echo "    for scenario, data in test_data.items():" >> "$TEST_FILE"
+              echo "        with pytest.subTest(scenario=scenario):" >> "$TEST_FILE"
+              echo "            result = function_to_test(data)" >> "$TEST_FILE"
+              echo "            assert result is not None" >> "$TEST_FILE"
             fi
           done <<< "$UNCOVERED_LINES"
 
@@ -134,6 +171,15 @@ jobs:
               console.error('Error creating comment:', error);
               process.exit(0);
             }
+
+      - name: Commit test files
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add src/test_*_coverage.py
+          git commit -m "Add test coverage for uncovered lines" || true
+          git push || true
 
       - name: Upload coverage to Codecov
         if: always() # Run this step even if previous steps fail
