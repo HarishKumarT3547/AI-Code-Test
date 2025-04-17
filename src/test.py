@@ -9,7 +9,7 @@ def createUser(firstName, lastName, email, password, phone, address, city, state
         return {"error": "Password too short"}
     if len(phone) != 10:
         return {"error": "Invalid phone number"}
-    
+
     # Complex nested logic
     user = {
         "firstName": firstName,
@@ -29,7 +29,7 @@ def createUser(firstName, lastName, email, password, phone, address, city, state
         "occupation": occupation,
         "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
-    
+
     return user
 
 # This function has deep nesting and complex error handling
