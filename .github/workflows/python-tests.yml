@@ -117,76 +117,6 @@ jobs:
             fi
           done <<< "$UNCOVERED_LINES"
 
-      - name: Create test files
-        run: |
-          # Create Python script
-          echo 'import os' > generate_tests.py
-          echo 'import re' >> generate_tests.py
-          echo 'from datetime import datetime' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo 'def sanitize_filename(name):' >> generate_tests.py
-          echo '    # Remove any non-alphanumeric characters except underscores' >> generate_tests.py
-          echo '    return re.sub(r"[^a-zA-Z0-9_]", "_", name)' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo 'def generate_test_file(module_name, lines):' >> generate_tests.py
-          echo '    # Create test recommendations directory if it doesnt exist' >> generate_tests.py
-          echo '    test_dir = "src/test_recommendations"' >> generate_tests.py
-          echo '    os.makedirs(test_dir, exist_ok=True)' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '    # Create a valid Python module name with timestamp' >> generate_tests.py
-          echo '    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")' >> generate_tests.py
-          echo '    sanitized_name = sanitize_filename(module_name)' >> generate_tests.py
-          echo '    test_module_name = f"test_{sanitized_name}_{timestamp}"' >> generate_tests.py
-          echo '    test_file = os.path.join(test_dir, f"{test_module_name}.py")' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '    # Check if file exists and delete it' >> generate_tests.py
-          echo '    if os.path.exists(test_file):' >> generate_tests.py
-          echo '        os.remove(test_file)' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '    with open(test_file, "w") as f:' >> generate_tests.py
-          echo '        f.write(f"""import pytest' >> generate_tests.py
-          echo 'import sys' >> generate_tests.py
-          echo 'import os' >> generate_tests.py
-          echo 'sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))' >> generate_tests.py
-          echo 'from {module_name} import *' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo 'def test_{sanitized_name}_coverage():' >> generate_tests.py
-          echo '    # Test setup' >> generate_tests.py
-          echo '    test_data = {{' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '        # Test data for lines 90-95' >> generate_tests.py
-          echo "        'null_input': None," >> generate_tests.py
-          echo "        'valid_input': {'key': 'value'}," >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '        # Test data for lines 111,116' >> generate_tests.py
-          echo "        'empty_list': []," >> generate_tests.py
-          echo "        'single_item': [1]," >> generate_tests.py
-          echo "        'multiple_items': [1, 2, 3]," >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '        # Test data for lines 119,127-128' >> generate_tests.py
-          echo "        'valid_input': 'valid'," >> generate_tests.py
-          echo "        'invalid_input': None," >> generate_tests.py
-          echo '    }}' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '    # Test cases' >> generate_tests.py
-          echo '    for scenario, data in test_data.items():' >> generate_tests.py
-          echo '        with pytest.subTest(scenario=scenario):' >> generate_tests.py
-          echo '            result = function_to_test(data)' >> generate_tests.py
-          echo '            assert result is not None' >> generate_tests.py
-          echo '""")' >> generate_tests.py
-          echo '' >> generate_tests.py
-          echo '# Process uncovered lines' >> generate_tests.py
-          echo 'with open("uncovered_lines.txt", "r") as f:' >> generate_tests.py
-          echo '    for line in f:' >> generate_tests.py
-          echo '        if "src/" in line:' >> generate_tests.py
-          echo '            file_path = line.split(":")[0]' >> generate_tests.py
-          echo '            module_name = os.path.splitext(os.path.basename(file_path))[0]' >> generate_tests.py
-          echo '            lines = line.split(":")[1]' >> generate_tests.py
-          echo '            generate_test_file(module_name, lines)' >> generate_tests.py
-
-          # Run the Python script
-          python3 generate_tests.py
-
       - name: Create PR comment
         uses: actions/github-script@v6
         with:
@@ -207,20 +137,6 @@ jobs:
               console.error('Error creating comment:', error);
               process.exit(0);
             }
-
-      - name: Commit test files
-        if: always()
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          # Check if any test files were created
-          if [ -n "$(find src/test_recommendations -name 'test_*.py')" ]; then
-            git add src/test_recommendations/
-            git commit -m "Add test coverage recommendations"
-            git push origin HEAD:${{ github.head_ref }}
-          else
-            echo "No test files were created to commit"
-          fi
 
       - name: Upload coverage to Codecov
         if: always() # Run this step even if previous steps fail
